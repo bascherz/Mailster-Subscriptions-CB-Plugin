@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<cbinstall version="4.5.3" type="plugin" group="user">
+    <name>Mailster Subscriptions</name>
+    <author>Bruce Scherzinger</author>
+    <creationDate>November 2022</creationDate>
+    <copyright>(C) 2007-2022 Bruce Scherzinger</copyright>
+    <license>http://www.gnu.org/copyleft/gpl.html GNU/GPL</license>
+    <authorEmail>joomlander@scherzinger.org</authorEmail>
+    <authorUrl>https://github.com/bascherz/Mailster-Subscriptions-CB-Plugin</authorUrl>
+    <version>2.0</version>
+    <release>1.0</release>
+    <description>
+        <![CDATA[
+            <h3>Mailster Subscriptions Community Builder Plug-In v1.0</h3>
+            <address>&copy; Bruce Scherzinger</address>
+            <p>Allows users to subscribe/unsubscribe to Mailster mailing lists from their CB profiles.</p>
+            <p>Special tags you can insert into email notice message fragments are as follows:</p>
+            <table border=1 cellspacing=0 cellpadding=1>
+            <tr>
+                <th>Tag</th><th>What is Inserted</th><th>In Message Parts</th>
+            </tr>
+            <tr>
+                <td>[USER]</td><td>Name of the subscriber.</td><td>A,E,F</td>
+            </tr>
+            <tr>
+                <td>[SITE]</td><td>Name of the website.</td><td>A,E,F</td>
+            </tr>
+            <tr>
+                <td>[EMAIL]</td><td>Primary account email address of the subscriber.</td><td>A,E,F</td>
+            </tr>
+            <tr>
+                <td>[EMAIL]</td><td>Email address applicable to the subscription or email address change.</td><td>B,C,D</td>
+            <tr>
+                <td>[OLD]</td><td>Old email address applicable to email address change.</td><td>D</td>
+            <tr>
+                <td>[LIST]</td><td>Name of the email list being un/subscribed.</td><td>B,C,D</td>
+            </tr>
+            </table>
+            <p>A Subscribe or Unsubscribe message will be inserted for each modification the
+            user makes. When HTML format is used, you can make this appear as a bulleted list. When Text
+            format is used, there is no formatting capability at all (not even using newlines).</p>
+            <p>Mailster is Free and Paid Software and is released under the Gnu Public License.
+            <a href="https://www.brandt-oss.com" target=_blank>https://www.brandt-oss.com</a></p>
+        ]]>
+    </description>
+    <files>
+        <filename plugin="cb.mailster_sub">cb.mailster_sub.php</filename>
+        <filename>cb.mailster_sub.xml</filename>
+        <filename>index.html</filename>
+    </files>
+    <params>
+        <param name="@spacer" 
+               type="spacer" 
+               default="" 
+               label="EMAIL OPTIONS" 
+               description="Extra email addresses and other options." />
+        <param name="autosubscribe" 
+               type="text" 
+               size="40" 
+               default="" 
+               label="Auto-subscribe Lists" 
+               description="Enter short names of lists to which new user primary account email addresses should be automatically subscribed separated with commas. For all lists, enter * or for none leave blank." />
+
+    <!-- MULTIPLE EMAIL ADDRESSES -->
+        <param name="emails" 
+               type="list" 
+               size="1" 
+               default="0" 
+               label="Use Multiple Email Addresses" 
+               description="Select a number to allow one or multiple email addresses (up to 4) per user for subscribing to Mailster lists. You will need to provide one field name for each subscription you want to support. Selecting No indicates only the primary account email can be subscribed to Mailster lists.">
+            <option value="0">No</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+        </param>
+    <!--
+        To change the number of supported email addresses, change the "On" option value above and
+        add or remove email# parameter definitions below. The number of email# parameter
+        definitions should equal or be greater than the On option value above. The parameter names
+        MUST FOLLOW the email# naming convention.
+     -->
+        <param name="email1" type="text" size="40" default="email"     label="Email #1" description="Enter the field name for an email address each user can use to subscribe to email lists." />
+        <param name="email2" type="text" size="40" default="cb_email2" label="Email #2" description="Enter the field name for an email address each user can use to subscribe to email lists." />
+        <param name="email3" type="text" size="40" default="cb_email3" label="Email #3" description="Enter the field name for an email address each user can use to subscribe to email lists." />
+        <param name="email4" type="text" size="40" default="cb_email4" label="Email #4" description="Enter the field name for an email address each user can use to subscribe to email lists." />
+        <param name="email_opts" type="text" size="40" default="" label="Email Options Field:" description="Enter the field name of the field where the full list of options is defined. This is necessary if you use a CB Code Field and your email list name options are not statically defined. If you are not using the CB Code Field plugin, leave this blank." />
+    <!-- END MULTIPLE EMAIL ADDRESSES -->
+
+        <param name="@spacer"
+               type="spacer" 
+               default="" 
+               label="EMAIL NOTIFICATION" 
+               description="The remaining options allow you to customize how this plug-in sends notification emails." />
+        <param name="send_email_notice" 
+               type="radio" 
+               default="No" 
+               label="Send Notification to" 
+               description="Do you want an email message sent when a user subscribes or unsubscribes?">
+            <option value="No">No</option>
+            <option value="User">User Only</option>
+            <option value="Admin">Admin Only</option>
+            <option value="Both">Admin and User</option>
+        </param>
+        <param name="send_termination_notice" 
+               type="radio" 
+               default="No" 
+               label="Send Account Deletion Notification" 
+               description="Do you want an email message sent when a user account is deleted?">
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+        </param>
+        <param name="admin_addr" 
+               type="text" 
+               size="40" 
+               default="" 
+               label="Admin Address" 
+               description="Enter the address to receive Admin notices. Leave blank to use site administrator address. NOTE: On some servers, this address may have to be different than the Site Administrator address or no message will be sent to the Admin." />
+        <param name="email_format" 
+               type="radio" 
+               default="0" 
+               label="Email Format" 
+               description="Which format should be used for sending the messages?">
+            <option value="0">Text</option>
+            <option value="1">HTML</option>
+        </param>
+        <param name="email_prefix" 
+               type="textarea" 
+               cols="40" 
+               rows="3" 
+               default="[USER] ([EMAIL]) successfully " 
+               label="Part A) Message Prefix" 
+               description="Front part of the message text to send. HTML is allowed." />
+        <param name="subscribe_email_msg" 
+               type="textarea" 
+               cols="40" 
+               rows="3" 
+               default="subscribed to the [LIST] list; " 
+               label="Part B) Subscribe Message" 
+               description="Message text to send to the subscribing member. HTML is allowed." />
+        <param name="autosubscribe_email_msg" 
+               type="textarea" 
+               cols="40" 
+               rows="3" 
+               default="auto-subscribed to the [LIST] list; " 
+               label="Part B) Auto-Subscribe Message" 
+               description="Message text to send to the auto-subscribed member. HTML is allowed." />
+        <param name="unsubscribe_email_msg" 
+               type="textarea" 
+               cols="40" 
+               rows="3" 
+               default="unsubscribed from the [LIST] list; " 
+               label="Part C) Unsubscribe Message" 
+               description="Message text to send to the unsubscribing member. HTML is allowed." />
+        <param name="changed_email_msg" 
+               type="textarea" 
+               cols="40" 
+               rows="3" 
+               default="changed [OLD] to [EMAIL]; " 
+               label="Part D) Address Change Message" 
+               description="Message text to send when a member changes an email address. HTML is allowed." />
+        <param name="email_suffix" 
+               type="textarea" 
+               cols="40" 
+               rows="3" 
+               default="The Webmaster" 
+               label="Part E) Message Suffix" 
+               description="End part of the message text to send. HTML is allowed." />
+        <param name="email_subject" 
+               type="text" 
+               size="40" 
+               default="[SITE] Email List Subscription Update" 
+               label="Part F) Email Subject" 
+               description="Subject of your subscription notification emails." />
+        <param name="email_from_addr" 
+               type="text" 
+               size="40" 
+               default="" 
+               label="From Address" 
+               description="From address for email notices. Leave blank to use site administrator address." />
+        <param name="email_from_name" 
+               type="text" 
+               size="40" 
+               default="" 
+               label="From Name" 
+               description="From name for email notices. Leave blank to use site administrator name." />
+    </params>
+    <tabs>
+        <tab name="Email Lists" description="Mailster Mail email lists" class="getMailsterTab" fields="1" position="cb_tabmain" displaytype="tab">
+            <fields>
+            </fields>
+        </tab>
+    </tabs>   
+    <install>
+    </install>
+    <uninstall>
+    </uninstall>       
+</cbinstall>
