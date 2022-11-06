@@ -13,7 +13,7 @@
     to the GNU General Public License, and as distributed it includes or
     is derivative of works licensed under the GNU General Public License or
     other free or open source software licenses.
-    (C) Bruce Scherzinger
+    (C) 2007-2017 Bruce Scherzinger
 
     Mailster is Free and Paid Software released under the Gnu Public License.
     https://www.brandt-oss.com
@@ -34,6 +34,9 @@ define("DEFAULT_ADDRESS_CHANGE_MSG","successfully changed [OLD] to [EMAIL].");
 define("DEFAULT_EMAIL_SUBJECT","[SITE] Email List Subscription Update");
 define("ALL_EMAIL_LISTS","all email lists");
 
+const FETCH      = 1;
+const DONT_FETCH = 0;
+
 // These registrations handle administrator modifications to user settings.
 $_PLUGINS->registerFunction('onUserActive',                 'afterUserActivated',   'getMailsterTab');
 $_PLUGINS->registerFunction('onBeforeUserUpdate',           'beforeUserUpdate',     'getMailsterTab');
@@ -46,10 +49,11 @@ $_PLUGINS->registerFunction('onBeforeUserProfileDisplay',   'beforeProfileDispla
 
 class userEmailObj
 {
-    public $label;
-    public $field;
-    public $email;
-    public $index;
+    public $label;  // label on email field
+    public $field;  // field name
+    public $email;  // email address extracted from field
+    public $name;   // name associated with the address
+    public $index;  // array index (superfluous)
 }
 
 class getMailsterTab extends cbTabHandler
@@ -61,14 +65,14 @@ class getMailsterTab extends cbTabHandler
 
     /******* EVENT HANDLERS *******/
 
-    function afterLogin($user, $garbage)
+    function afterLogin($user, $dontcare)
     {
         // Since the onBeforeUserProfileEditDisplay event doesn't update the display AFTER handling user events (it does so BEFORE),
         // update the profile fields at login so that by the time the user edits the profile they are set.
         $this->RefreshProfileSubscriptions($user);
     }
 
-    function beforeProfileDisplay(&$user, $garbage, $cbUserIsModerator, $cbMyIsModerator)
+    function beforeProfileDisplay(&$user, $dontcare, $cbUserIsModerator, $cbMyIsModerator)
     {
         // Refresh the profile just before displaying it.
         $this->RefreshProfileSubscriptions($user);
@@ -95,75 +99,53 @@ class getMailsterTab extends cbTabHandler
         // Using Mailster groups for account emails, Mailster users for extra emails.
         $lists = $this->getLists();
 
-        // Get all email addresses for this user's account
-        $addresses = $this->getEmails($user, $user_emails, $fieldsquery);
-
         // Prepare to notify the user
         $message = "";
         $changes = 0;
 
-        // If any of the user's email addresses changed, modify all matching subscription records.
-        foreach ($addresses as $address)
+        // Get all old and new email addresses for this user's account.
+        $old_info = $this->getEmails($user, $dontcare, $dontcare, FETCH);
+        $new_info = $this->getEmails($user, $dontcare, $dontcare, DONT_FETCH);
+
+        // If any of the user's email addresses or associatetd names changed, modify all matching subscription records.
+        $email = count($old_info);
+        foreach ($old_info as $old)
         {
-            // The field providing the email address is provided by the getEmails method.
-            $field = $address->field;
-            if ($address->email)
-            {
-                $old_email = $address->email;
-            }
-            else
-            {
-                $old_email = "{nothing}";
-            }
-
             /*
-             * No attribute identifying the table from which the email address came is provided
-             * by getEmails. So we have to do a little guess work here.
+             * Get the new_info email and name corresponding to this old_info
              */
-            if ($cbUser->$field)
-            {
-                $new_email = trim($cbUser->$field);
-            }
-            else
-            {
-                $new_email = trim($user->$field);
-            }
-            if (!$new_email) $new_email = "{nothing}";
+            $new = $new_info[$email];
 
             /*
-             * What we're checking for here is really a change in email address, not a change in
+             * We're checking for a change in email address or associated name, not a change in
              * subscribership. Of course, if an email address that is subscribed to a Mailster list is
-             * modified, it will be modified for every list to which it was subscribed. Of course,
-             * Mailster's CB bridge handles the account email if it is changed. So here we are just
-             * dealing with the extra emails.
+             * modified, it will be modified for every list to which it was subscribed.
              */
-            if (strtolower($old_email) != strtolower($new_email))
+            if ((strtolower($new->email) != strtolower($old->email)) ||
+                           ($new->name   !=            $old->name))
             {
                 // Loop through all the lists. Need to do this to check for existing subscriptions.
                 foreach ($lists as $list)
                 {
-                    // See if there is already a record like the one we are about to create.
-                    $db->setQuery("SELECT COUNT(*) FROM #__mailster_users u JOIN #__mailster_group_users g ON g.user_id=u.id WHERE u.email='$old_email' AND g.group_id='$list->group_id';");
+                    // See if there is a record like the one we are about to create.
+                    $db->setQuery("SELECT COUNT(*) FROM #__mailster_users u JOIN #__mailster_group_users g ON g.user_id=u.id WHERE u.email='$old->email' AND g.group_id='$list->group_id';");
                     $subscriptions = $db->loadResult();
                     if ($subscriptions > 0)
                     {
-                        if ($new_email == "{nothing}")
+                        // We need to update the email address for the existing subscription.
+                        $this->UpdateSubscribedEmail ($old->email, strtolower($new->email), ucwords(strtolower($new->name)));
+                        if ($new->email != $old->email)
                         {
-                            // There is a group record with the old address for this list, so unsubscribe the old email address.
-                            $this->UnsubscribeAddress ($old_email, $list);
-                        }
-                        else
-                        {
-                            // We need to update the email address for the existing subscription.
-                            $this->UpdateSubscribedEmail ($old_email, $new_email);
+//                            $this->UnsubscribeAddress ($old->email, $list);
                         }
                     }
                 }
                 $changes++;
                 $message .= str_replace(array('[LIST]',    '[OLD]',   '[EMAIL]', '[LABEL]',      '[FIELD]'),
-                                        array($list->name,$old_email,$new_email,$address->label,$address->field),
+                                        array($list->name,$old->email,$new->email,$old->label,$old->field),
                                         $params->get('changed_email_msg',DEFAULT_ADDRESS_CHANGE_MSG));
             }
+            $email--;
         }
         // Send notification of email address changes, if any.
         if ($changes > 0)
@@ -287,7 +269,6 @@ class getMailsterTab extends cbTabHandler
             {
                 // Unsubscribe this address from all lists
                 $this->UnsubscribeAddress($address->email);
-debug("Unsubscribing $address->email from ".ALL_EMAIL_LISTS,"beforeDeleteUser");
                 $message .= str_replace(array('[LIST]','[EMAIL]'),array(ALL_EMAIL_LISTS,$address->email),$params->get('unsubscribe_email_msg',DEFAULT_UNSUBSCRIBE_MSG));
             }
         }
@@ -301,7 +282,7 @@ debug("Unsubscribing $address->email from ".ALL_EMAIL_LISTS,"beforeDeleteUser");
 	return true;
     }
 
-    /******* UTILITY METHODS *******/
+    /******* UTILITY FUNCTIONS *******/
     /*
      * Fetches the states of the actual settings in the Mailster tables.
      * Overrides what may currently be set in #__comprofiler. This avoids having
@@ -322,94 +303,84 @@ debug("Unsubscribing $address->email from ".ALL_EMAIL_LISTS,"beforeDeleteUser");
         }
 
         // Get all email addresses for this user's account
-        $addresses = $this->getEmails($user, $user_emails, $garbage);
-debug("Addresses: ".print_r($addresses,true),"RefreshProfileSubscriptions");
-debug("User Emails:".print_r(str_replace("'","",$user_emails),true),"RefreshProfileSubscriptions");
+        $addresses = $this->getEmails($user, $user_emails, $dontcare);
 
         // Fetch complete list of subscriptions from Mailster Group Users table for extra email addresses.
         $subscriptions = $this->getSubscriptions($user_emails);
-debug("Subscriptions: ".print_r($subscriptions,true),"RefreshProfileSubscriptions");
 
         // Point to plugin parameters
         $params = $this->params;
 
         // Assess which lists the user is subscribed to.
-        if ($lists)
+        foreach ($lists as $list)
         {
-            foreach ($lists as $list)
+            // If an options field name is specified, use that as the source for options for all email lists.
+            // Otherwise, get the list email field name.
+            // In either case, find the associated option list.
+            $lists_field = $params->get('email_opts',"");
+            if ($lists_field == "")
             {
-                // If an options field name is specified, use that as the source for options for all email lists.
-                // Otherwise, get the list email field name.
-                // In either case, find the associated option list.
-                $lists_field = $params->get('email_opts',"");
-                if ($lists_field == "")
-                {
-                    $optionsfield = $this->listDbFieldName($list->name);
-                }
-                else
-                {
-                    $optionsfield = $lists_field;
-                }
+                $optionsfield = $this->listDbFieldName($list->name);
+            }
+            else
+            {
+                $optionsfield = $lists_field;
+            }
 
-                // Set the CB field value for each list based on the actual subscription.
-                $db->setQuery("SELECT * FROM #__comprofiler_fields WHERE name='$optionsfield';");
-                $field = $db->loadObject();
-                $listselections = "";
-                if ($field->type == 'checkbox')
+            // Set the CB field value for each list based on the actual subscription.
+            $db->setQuery("SELECT * FROM #__comprofiler_fields WHERE name='$optionsfield';");
+            $field = $db->loadObject();
+            $listselections = "";
+            if ($field->type == 'checkbox')
+            {
+                foreach ($subscriptions as $subscription)
                 {
-                    foreach ($subscriptions as $subscription)
+                    if ($subscription->group_id == $list->group_id)
                     {
-                        if ($subscription->group_id == $list->group_id)
-                        {
-                            if (strlen($selections[$list->name]) > 0) $selections[$list->name] .= "|*|";
-                            $selections[$list->name] .= $fieldtitle;
-                            break;
-                        }
+                        if (strlen($selections[$list->name]) > 0) $selections[$list->name] .= "|*|";
+                        $selections[$list->name] .= $fieldtitle;
+                        break;
                     }
-                    $listselections = $selections[$list->name];
                 }
-                elseif ($field->type == 'multicheckbox' || $field->type == 'codemulticheckbox' || $field->type == 'querymulticheckbox' ||
-                        $field->type == 'multiselect'   || $field->type == 'codemultiselect'   || $field->type == 'querymultiselect')
+                $listselections = $selections[$list->name];
+            }
+            elseif ($field->type == 'multicheckbox' || $field->type == 'codemulticheckbox' || $field->type == 'querymulticheckbox' ||
+                    $field->type == 'multiselect'   || $field->type == 'codemultiselect'   || $field->type == 'querymultiselect')
+            {
+                /*
+                 * Whatever the user had chosen before will be overridden by what the
+                 * mailster_group_users table says and how that maps to the addresses
+                 * entered by this user and supported by the site.
+                 */
+                // this is for the extra email addresses
+                foreach ($subscriptions as $subscription)
                 {
-                    /*
-                     * Whatever the user had chosen before will be overridden by what the
-                     * mailster_group_users table says and how that maps to the addresses
-                     * entered by this user and supported by the site.
-                     */
-                    // this is for the extra email addresses
-                    foreach ($subscriptions as $subscription)
+                    if ($subscription->group_id && ($subscription->group_id == $list->group_id))
                     {
-debug("Sub gp=$subscription->group_id, List gp=$list->group_id","RefreshProfileSubscriptions");
-                        if ($subscription->group_id == $list->group_id)
+                        foreach ($addresses as $address)
                         {
-                            foreach ($addresses as $address)
+                            if ($subscription->email && (strtolower($subscription->email) == strtolower($address->email)))
                             {
-debug("Sub email=$subscription->email, Address email=$address->email","RefreshProfileSubscriptions");
-                                if (strtolower($subscription->email) == strtolower($address->email))
-                                {
-                                    // Get the title of the option associated with this email address
-                                    $db->setQuery("SELECT fieldtitle FROM #__comprofiler_field_values WHERE fieldid=".$field->fieldid." AND ordering=".$address->index.";");
-                                    $fieldtitle = $db->loadResult();
+                                // Get the title of the option associated with this email address
+                                $db->setQuery("SELECT fieldtitle FROM #__comprofiler_field_values WHERE fieldid=".$field->fieldid." AND ordering=".$address->index.";");
+                                $fieldtitle = $db->loadResult();
 
-                                    // See if checkbox is checked
-                                    if(stripos($selections[$list->name],$fieldtitle) === false)
-                                    {
-debug("$subscription->email is subscribed to $list->name","RefreshProfileSubscriptions");
-                                        if (strlen($selections[$list->name]) > 0) $selections[$list->name] .= "|*|";
-                                        $selections[$list->name] .= $fieldtitle;
-                                    }
+                                // See if checkbox is checked
+                                if((stripos($selections[$list->name],$fieldtitle) === false))
+                                {
+                                    if (strlen($selections[$list->name]) > 0) $selections[$list->name] .= "|*|";
+                                    $selections[$list->name] .= $fieldtitle;
                                 }
                             }
                         }
                     }
-                    $listselections = $selections[$list->name];
                 }
-debug("List=$list->name, Selections= $listselections","RefreshProfileSubscriptions");
-                // Update the profile field with all subscribed addresses.
-                $listfield = $this->listDbFieldName($list->name);
-                $db->setQuery("UPDATE #__comprofiler SET $listfield = '$listselections' WHERE user_id=$user->id;");
-                $db->execute();
+                $listselections = $selections[$list->name];
             }
+            // Update the profile field with all subscribed addresses.
+            $listfield = $this->listDbFieldName($list->name);
+            $db->setQuery("UPDATE #__comprofiler SET $listfield = '$listselections' WHERE user_id=$user->id;");
+            $db->execute();
         }
     }
     
@@ -492,7 +463,7 @@ debug("List=$list->name, Selections= $listselections","RefreshProfileSubscriptio
      * Subscribes an address to the list. This includes adding Mailster table records
      * but NOT setting the corresponding profile flag in #__comprofiler.
      */
-    function SubscribeAddress($email, $list, $name)
+    function SubscribeAddress($email, $group_id, $name)
     {
         // Let's get the database
         static $db;
@@ -513,16 +484,20 @@ debug("List=$list->name, Selections= $listselections","RefreshProfileSubscriptio
             $user = $db->loadObject();
         }
         
-        if (!$user)
+        if ($user)
+        {
+            $user_id = $user->id;
+        }
+        else
         {
             // This email address doesn't exist yet. Add it to the Mailster users list.
             $db->setQuery("INSERT INTO #__mailster_users (email,name) VALUES ('$email','$name');");
             $db->execute();
-            $db->setQuery("SELECT * FROM #__mailster_users WHERE email='$email';");
-            $user = $db->loadObject();
+            $db->setQuery("SELECT id FROM #__mailster_users WHERE email='$email';");
+            $user_id = $db->loadResult();
         }
         // Subscribe the address to the list.
-        $db->setQuery("INSERT INTO #__mailster_group_users (group_id,user_id,is_joomla_user) VALUES ($list,$user->id,$is_joomla_user);");
+        $db->setQuery("INSERT INTO #__mailster_group_users (group_id,user_id,is_joomla_user) VALUES ($group_id,$user_id,$is_joomla_user);");
         $db->execute();
         return true;
     }
@@ -537,8 +512,8 @@ debug("List=$list->name, Selections= $listselections","RefreshProfileSubscriptio
         // Let's get the database
         static $db;
         $db = JFactory::getDBO();
+        $result = false;
 
-debug("Unsubscribing $email from $list->name...","UnsubscribeAddress");
         // It's going to be in one place or the other, but not both.
         // And there will only be one record matching in either case.
         $db->setQuery("SELECT * FROM #__users WHERE email='$email';");
@@ -562,17 +537,27 @@ debug("Unsubscribing $email from $list->name...","UnsubscribeAddress");
                 $listquery = "";
             }
             // Unsubscribe the user from the list.
-            $db->setQuery("DELETE FROM #__mailster_group_users WHERE user_id='$user->id' $listquery;");
+            $db->setQuery("DELETE FROM #__mailster_group_users WHERE user_id=$user->id $listquery;");
             $db->execute();
+            $result = true;
+
+            // Check to see if there are any other subscriptions for this address.
+            $db->setQuery("SELECT COUNT(*) FROM #__mailster_group_users WHERE user_id=$user->id;");
+            if ($db->loadResult() == 0)
+            {
+                // No more subscriptions, so remove the address completely.
+                $db->setQuery("DELETE FROM #__mailster_users WHERE id=$user->id;");
+                $db->execute();
+            }
         }
     }
 
     /*
-     * Fetches all email addresses associated with the current user and returns them in an array.
+     * Fetches all email addresses and names associated with the current user and returns them in an array.
      * Also returns a database query fragment for selecting email addresses from the subscription table.
      * Use of $fieldsquery requires a JOIN query between #__users and #__comprofiler based on id.
      */
-    function getEmails($user, &$addresslist, &$fieldsquery)
+    function getEmails($user, &$addresslist, &$fieldsquery, $fetch=FETCH)
     {
         // Let's get the database
         static $db;
@@ -585,44 +570,84 @@ debug("Unsubscribing $email from $list->name...","UnsubscribeAddress");
         $emails = array();
         $addresslist = "'EMAILADDRESS'"; 
         $fieldsquery = "";
-        
-        // Get this user's entire record
-        $db->setQuery("SELECT * FROM #__users as u INNER JOIN #__comprofiler as c ON u.id=c.id WHERE u.id=".$user->id.";");
-        $row = $db->loadObject();
+
+        // Get this user's entire record from the database if requested. Note this overwrites the $user object passed in.
+        if($fetch == FETCH)
+        {
+            $db->setQuery("SELECT * FROM #__users as u INNER JOIN #__comprofiler as c ON u.id=c.id WHERE u.id=".$user->id.";");
+            $user = $db->loadObject();
+        }
 
         // Get a list of CB fields to fetch email addresses from, if any
         $Nemails = intval($params->get('emails',"0"));
         if ($Nemails)
         {
-            for ($email = 1; $email <= $Nemails; $email++)
+            for ($emailN = 1; $emailN <= $Nemails; $emailN++)
             {
-                $field = $params->get('email'.$email,"");
-                if (strlen(trim($field)) > 0)
+                $emailfield = trim($params->get('email'.$emailN,""));
+                if (strlen($emailfield) > 0)
                 {
-debug("Getting email$email","getEmails");
-                    $db->setQuery("SELECT * FROM #__comprofiler_fields WHERE name='$field';");
-                    $fieldinfo = $db->loadObject();
-                    $emails[$email] = new userEmailObj();
-                    $emails[$email]->label = $fieldinfo->title;
-                    $emails[$email]->field = $field;
-                    $emails[$email]->email = $row->$field;
-                    $emails[$email]->index = $email;
-                    if (strlen($fieldsquery)) $fieldsquery .= ","; $fieldsquery .= "$field";
-                    if (strlen($addresslist)) $addresslist .= ","; $addresslist .= "'".$row->$field."'";
+                    // get the name associated with this address (maybe)
+                    if ($emailfield == 'email')
+                    {
+                        // account email is easy
+                        $emailname = $user->name;
+                    }
+                    else
+                    {
+                        // Extra emails require the fields in params exist. Apply naming convention.
+                        $firstnamefield = $emailfield."firstname";
+                        $lastnamefield  = $emailfield."lastname";
+
+                        // See if firstname field exists
+                        $db->setQuery("SELECT title FROM #__comprofiler_fields WHERE name='$firstnamefield';");
+                        $firstnameexists = $db->loadResult();
+                        
+                        // See if lastname field exists
+                        $db->setQuery("SELECT title FROM #__comprofiler_fields WHERE name='$lastnamefield';");
+                        $lastnameexists = $db->loadResult();
+
+                        // Concatenate first and last names. If they're blank, oh well.
+                        $emailname = "";
+                        if ($firstnameexists)
+                        {
+                            $emailname = trim($user->$firstnamefield);
+                        }
+                        if ($lastnameexists)
+                        {
+                            $emailname .= " ".trim($user->$lastnamefield);
+                            $emailname = trim($emailname);
+                        }
+                    }
+                    // Get the name of the email address field. This also tells us if it exists.
+                    $db->setQuery("SELECT title FROM #__comprofiler_fields WHERE name='$emailfield';");
+                    $emailfieldtitle = $db->loadResult();
+                    
+                    $emails[$emailN] = new userEmailObj();  // need this to keep inquiring code in sync
+                    if ($emailfieldtitle)
+                    {
+                        $emails[$emailN]->label = $emailfieldtitle;
+                        $emails[$emailN]->field = $emailfield;
+                        $emails[$emailN]->email = $user->$emailfield;
+                        $emails[$emailN]->index = $emailN;
+                        $emails[$emailN]->name  = $emailname;
+                        if (strlen($fieldsquery)) $fieldsquery .= ","; $fieldsquery .= "$emailfield";
+                        if (strlen($addresslist)) $addresslist .= ","; $addresslist .= "'".$user->$emailfield."'";
+                    }
                 }
             }
-debug(print_r($emails,true),"getEmails");
         }
         else
         {
             // Only using the primary email address
-            $db->setQuery("SELECT * FROM #__comprofiler_fields WHERE name='email';");
-            $fieldinfo = $db->loadObject();
+            $db->setQuery("SELECT title FROM #__comprofiler_fields WHERE name='email';");
+            $emailfieldtitle = $db->loadResult();
             $emails[1] = new userEmailObj();
-            $emails[1]->label = $fieldinfo->title;
+            $emails[1]->label = $emailfieldtitle;
             $emails[1]->field = $fieldsquery = 'email';
             $emails[1]->email = $user->email;
             $emails[1]->index = 1;
+            $emails[1]->name  = $user->name;
             $addresslist = "'".$user->email."'";
         }
         return array_reverse($emails,true);
@@ -711,15 +736,15 @@ debug(print_r($emails,true),"getEmails");
          * most of the stuff this query fetches multiple times, but doing it this way
          * requires only a single query, which is always nice.
          */ 
-        $db->setQuery("SELECT v.* FROM #__comprofiler_field_values as v".
-                            " INNER JOIN #__comprofiler_fields as f".
+        $db->setQuery("SELECT v.* FROM #__comprofiler_field_values v".
+                            " INNER JOIN #__comprofiler_fields f".
                             " ON v.fieldid=f.fieldid".
                             " WHERE f.name='".$opt_field_name."'".
                             " ORDER BY v.ordering;");
         $options = $db->loadObjectList();
 
         // Get the necessary information for this user
-        $db->setQuery("SELECT * FROM #__users as u INNER JOIN #__comprofiler as c ON u.id=c.id WHERE u.id=".$user->id.";");
+        $db->setQuery("SELECT * FROM #__users u INNER JOIN #__comprofiler c ON u.id=c.id WHERE u.id=".$user->id.";");
         $userstuff = $db->loadObject();
 
         /* Attributes in returned array are:
@@ -757,7 +782,7 @@ debug(print_r($emails,true),"getEmails");
     /*
      * Based on the choices the user or administrator made for list subscriptions, update
      * the Mailster subscriptions tables. Also, build a message to send to the user/admin as a
-     * notification. If any changes in subscriptions occur during this method, a non-zero number
+     * notification. If any changes in subscriptions occur during this function, a non-zero number
      * is returned and message will be non-zero length.
      */
     function UpdateSubscriptions ($user, &$message)
@@ -774,13 +799,12 @@ debug(print_r($emails,true),"getEmails");
         
         // Fetch list of lists.
         $lists = $this->getLists();
-        
+
         // Get all email addresses for this user's account
-        $user_emails = $fieldsquery = "";
         $addresses = $this->getEmails($user, $user_emails, $fieldsquery);
 
         // Assess which lists the user wishes to be un/subscribed from/to.
-        $message = "";
+        $fieldsquery = $message = "";
         $number = 0;
         foreach ($lists as $list)
         {
@@ -829,19 +853,19 @@ debug(print_r($emails,true),"getEmails");
                     $field->type == 'multiselect'   || $field->type == 'codemultiselect'   || $field->type == 'querymultiselect')
             {
                 // Get a list of which address(es) this user has subscribed to this list
-                $addresses = $this->getOptionList($list, $user);
+                $options = $this->getOptionList($list, $user);
 
                 // Check each address to see if it is subscribed
-                foreach ($addresses as $address)
+                foreach ($options as $option)
                 {
                     // No sense checking for a subscription if there's no email adddress defined
-                    if (strlen(trim($address->email)) > 0)
+                    if (strlen(trim($option->email)) > 0)
                     {
                         // Assume not subscribed
                         $subscribed = 0;
                         foreach ($subscriptions as $subscription)
                         {
-                            if ($subscription->email == $address->email)
+                            if ($subscription->email == $option->email)
                             {
                                 // A subscription to this list exists
                                 $subscribed = 1;
@@ -849,15 +873,15 @@ debug(print_r($emails,true),"getEmails");
                             }
                         }
                         // Unsubscribe if subscribed and not checked, and vice versa.
-                        if ($subscribed && !$address->selected)
+                        if ($subscribed && !$option->selected)
                         {
-                            $this->UnsubscribeAddress($address->email, $list);
+                            $this->UnsubscribeAddress($option->email, $list);
                             $message .= $params->get('unsubscribe_email_msg',DEFAULT_UNSUBSCRIBE_MSG);
                             $number++;
                         }
-                        elseif (!$subscribed && $address->selected && trim($address->email) != '')
+                        elseif (!$subscribed && $option->selected && trim($option->email) != '')
                         {
-                            if ($this->SubscribeAddress($address->email, $list->group_id, $user->name))
+                            if ($this->SubscribeAddress($option->email, $list->group_id, $user->name))
                             {
                                 $message .= $params->get('subscribe_email_msg',DEFAULT_SUBSCRIBE_MSG);
                                 $number++;
@@ -865,7 +889,7 @@ debug(print_r($emails,true),"getEmails");
                         }
                         // Replace notice message placeholders. We have to replace [EMAIL] now
                         // since the extended addresses are not handled below.
-                        $message = str_replace(array('[LIST]','[EMAIL]'),array($list->name,$address->email),$message);
+                        $message = str_replace(array('[LIST]','[EMAIL]'),array($list->name,$option->email),$message);
                     }
                 }
             }
@@ -874,7 +898,7 @@ debug(print_r($emails,true),"getEmails");
     }
     
     /*
-     * Notify the user of any subscription changes. Note: this method should not be called
+     * Notify the user of any subscription changes. Note: this function should not be called
      * unless there is substance to the message.
      */
     function NotifyUser($user, $message, $subject='')
@@ -960,9 +984,12 @@ debug(print_r($emails,true),"getEmails");
      * Replace the old email with the new one in the user list.
      * This will do nothing for account email addresses.
      */
-    function UpdateSubscribedEmail ($old_email, $new_email)
+    function UpdateSubscribedEmail ($old_email, $new_email, $new_name)
     {
-        $db->setQuery("UPDATE #__mailster_users SET email='$new_email' WHERE email='$old_email';");
+        static $db;
+        $db = JFactory::getDBO();
+
+        $db->setQuery("UPDATE #__mailster_users SET email='$new_email', name='$new_name' WHERE email='$old_email';");
         $db->execute();
     }
 
@@ -1004,17 +1031,4 @@ debug(print_r($emails,true),"getEmails");
         return $db->loadObjectList();
     }
 }
-    function debug($message,$tag="{skip}")
-    {
-        static $db;
-        $db = JFactory::getDBO();
-
-        // Add tags of debug messages you want posted by appending "MYTAG|" to this string.
-        $tags = "|beforeDeleteUser|UnsubscribeAddress|";
-        if (!(stripos($tags,$tag) === false))
-        {
-            $db->setQuery("INSERT INTO a_debug_log (message) VALUES ('$message')");
-            $db->execute();
-        }
-    }
 ?>
