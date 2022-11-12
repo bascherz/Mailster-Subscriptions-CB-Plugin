@@ -973,11 +973,12 @@ class getMailsterTab extends cbTabHandler
     }
 
     /*
-     * The name of the list in the database cannot have any whitespace.
+     * We don't want the name of the list in the database to have any whitespace or weird characters.
+     * Anything not alphanumeric is replaced with an underscore here.
      */
     function listDbFieldName($name)
     {
-        return "cb_".strtolower(str_replace("\s+","_",$name));
+        return "cb_".strtolower(preg_replace('/[^\p{L}\p{N}]/u','_',$name));
     }
 
     /*
