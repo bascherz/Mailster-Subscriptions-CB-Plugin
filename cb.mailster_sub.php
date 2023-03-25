@@ -1,8 +1,8 @@
 <?php
 /**
     Name:    CB Mailster Subscriptions
-    Version: 1.0, native for Joomla 4
-    Date:    November 2022
+    Version: 1.1, native for Joomla 4
+    Date:    March 2023
     Author:  Bruce Scherzinger
     Email:   joomlander@scherzinger.org
     URL:     http://joomla.org

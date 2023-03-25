@@ -2,16 +2,16 @@
 <cbinstall version="4.5.3" type="plugin" group="user">
     <name>Mailster Subscriptions</name>
     <author>Bruce Scherzinger</author>
-    <creationDate>November 2022</creationDate>
-    <copyright>(C) 2007-2022 Bruce Scherzinger</copyright>
+    <creationDate>March 2023</creationDate>
+    <copyright>(C) 2007-2023 Bruce Scherzinger</copyright>
     <license>http://www.gnu.org/copyleft/gpl.html GNU/GPL</license>
     <authorEmail>joomlander@scherzinger.org</authorEmail>
     <authorUrl>https://github.com/bascherz/Mailster-Subscriptions-CB-Plugin</authorUrl>
     <version>2.0</version>
-    <release>1.0</release>
+    <release>1.1</release>
     <description>
         <![CDATA[
-            <h3>Mailster Subscriptions Community Builder Plug-In v1.0</h3>
+            <h3>Mailster Subscriptions Community Builder Plug-In v1.1</h3>
             <address>&copy; Bruce Scherzinger</address>
             <p>Allows users to subscribe/unsubscribe to Mailster mailing lists from their CB profiles.</p>
             <p>Special tags you can insert into email notice message fragments are as follows:</p>
