@@ -136,14 +136,13 @@ class getMailsterTab extends cbTabHandler
                         $this->UpdateSubscribedEmail ($old->email, strtolower($new->email), ucwords(strtolower($new->name)));
                         if ($new->email != $old->email)
                         {
-//                            $this->UnsubscribeAddress ($old->email, $list);
+                            $changes++;
+                            $message .= str_replace(array('[LIST]',    '[OLD]',   '[EMAIL]', '[LABEL]',      '[FIELD]'),
+                                                    array($list->name,$old->email,$new->email,$old->label,$old->field),
+                                                          $params->get('changed_email_msg',DEFAULT_ADDRESS_CHANGE_MSG));
                         }
                     }
                 }
-                $changes++;
-                $message .= str_replace(array('[LIST]',    '[OLD]',   '[EMAIL]', '[LABEL]',      '[FIELD]'),
-                                        array($list->name,$old->email,$new->email,$old->label,$old->field),
-                                        $params->get('changed_email_msg',DEFAULT_ADDRESS_CHANGE_MSG));
             }
             $email--;
         }
@@ -359,7 +358,7 @@ class getMailsterTab extends cbTabHandler
                     {
                         foreach ($addresses as $address)
                         {
-                            if ($subscription->email && (strtolower($subscription->email) == strtolower($address->email)))
+                            if ($subscription->email && (strtolower((string)($subscription->email) == strtolower((string)($address->email)))))
                             {
                                 // Get the title of the option associated with this email address
                                 $db->setQuery("SELECT fieldtitle FROM #__comprofiler_field_values WHERE fieldid=".$field->fieldid." AND ordering=".$address->index.";");
@@ -611,11 +610,11 @@ class getMailsterTab extends cbTabHandler
                         $emailname = "";
                         if ($firstnameexists)
                         {
-                            $emailname = trim($user->$firstnamefield);
+                            $emailname = trim((string)($user->$firstnamefield));
                         }
                         if ($lastnameexists)
                         {
-                            $emailname .= " ".trim($user->$lastnamefield);
+                            $emailname .= " ".trim((string)($user->$lastnamefield));
                             $emailname = trim($emailname);
                         }
                     }
@@ -903,8 +902,11 @@ class getMailsterTab extends cbTabHandler
      */
     function NotifyUser($user, $message, $subject='')
     {
-        // Create application object
-        $config = JFactory::getConfig();
+        // Get the application framework
+        $mainframe = JFactory::getApplication();
+
+        // Get plug-in parameters
+        $params = $this->params;
 
         // Let's get the database
         static $db;
@@ -914,7 +916,6 @@ class getMailsterTab extends cbTabHandler
         $mailer = JFactory::getMailer();
  
         // If applicable, notify the user of the subscription changes.
-        $params = $this->params;
         $notify = $params->get('send_email_notice','No');
         if ($notify != "No")
         {
@@ -923,8 +924,8 @@ class getMailsterTab extends cbTabHandler
             $suffix = $params->get('email_suffix','');
         
             // Get email addresses
-            $admin_addr = $params->get('admin_addr'     ,$config->get('mailfrom'));
-            $from_name  = $params->get('email_from_name',$config->get('fromname'));
+            $admin_addr = $params->get('admin_addr'     ,$mainframe->getCfg('mailfrom'));
+            $from_name  = $params->get('email_from_name',$mainframe->getCfg('fromname'));
             $from_addr  = $params->get('email_from_addr',$admin_addr);
 
             // Replace notice message placeholders
@@ -932,8 +933,8 @@ class getMailsterTab extends cbTabHandler
             {
                 $subject = $params->get('email_subject',DEFAULT_EMAIL_SUBJECT);
             }
-            $subject = str_replace(array('[SITE]','[EMAIL]','[USER]'),array($config->get('sitename'),$user->email,$user->name),$subject);
-            $message = str_replace(array('[SITE]','[EMAIL]','[USER]'),array($config->get('sitename'),$user->email,$user->name),$prefix.$message.$suffix);
+            $subject = str_replace(array('[SITE]','[EMAIL]','[USER]'),array($mainframe->getCfg('sitename'),$user->email,$user->name),$subject);
+            $message = str_replace(array('[SITE]','[EMAIL]','[USER]'),array($mainframe->getCfg('sitename'),$user->email,$user->name),$prefix.$message.$suffix);
 
             // Get email format
             $format = intval($params->get('email_format','0'));
