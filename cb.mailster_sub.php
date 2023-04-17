@@ -1,8 +1,8 @@
 <?php
 /**
     Name:    CB Mailster Subscriptions
-    Version: 1.1, native for Joomla 4
-    Date:    March 2023
+    Version: 1.2, native for Joomla 4
+    Date:    April 2023
     Author:  Bruce Scherzinger
     Email:   joomlander@scherzinger.org
     URL:     http://joomla.org
@@ -228,7 +228,7 @@ class getMailsterTab extends cbTabHandler
             {
                 /* Add the subscription */
                 $result = $this->SubscribeAddress($user->email, $list->group_id, $user->name);
-                $message .= str_replace(array('[LIST]','[EMAIL]'),array($list->value,$user->email),$params->get('autosubscribe_email_msg',DEFAULT_AUTOSUBSCRIBE_MSG));
+                $message .= str_replace(array('[LIST]','[EMAIL]'),array($list->name,$user->email),$params->get('autosubscribe_email_msg',DEFAULT_AUTOSUBSCRIBE_MSG));
                 $number++;
             }
         }
@@ -846,7 +846,7 @@ class getMailsterTab extends cbTabHandler
                     }
                 }
                 // Replace notice message placeholders
-                $message = str_replace(array('[LIST]','[EMAIL]'),array($list->value,$user->email),$message);
+                $message = str_replace(array('[LIST]','[EMAIL]'),array($list->name,$user->email),$message);
             }
             elseif ($field->type == 'multicheckbox' || $field->type == 'codemulticheckbox' || $field->type == 'querymulticheckbox' ||
                     $field->type == 'multiselect'   || $field->type == 'codemultiselect'   || $field->type == 'querymultiselect')

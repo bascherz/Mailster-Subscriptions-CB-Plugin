@@ -8,10 +8,10 @@
     <authorEmail>joomlander@scherzinger.org</authorEmail>
     <authorUrl>https://github.com/bascherz/Mailster-Subscriptions-CB-Plugin</authorUrl>
     <version>2.0</version>
-    <release>1.1</release>
+    <release>1.2</release>
     <description>
         <![CDATA[
-            <h3>Mailster Subscriptions Community Builder Plug-In v1.1</h3>
+            <h3>Mailster Subscriptions Community Builder Plug-In v1.2</h3>
             <address>&copy; Bruce Scherzinger</address>
             <p>Allows users to subscribe/unsubscribe to Mailster mailing lists from their CB profiles.</p>
             <p>Special tags you can insert into email notice message fragments are as follows:</p>
