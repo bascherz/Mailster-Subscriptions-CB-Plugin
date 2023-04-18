@@ -224,7 +224,7 @@ class getMailsterTab extends cbTabHandler
         $number = 0;
         foreach ($lists as $list)
         {
-            if ($auto == "*," || strstr($auto,$list->group_id.","))
+            if ($auto == "*," || strstr(strtolower($auto),strtolower($list->name.",")))
             {
                 /* Add the subscription */
                 $result = $this->SubscribeAddress($user->email, $list->group_id, $user->name);
